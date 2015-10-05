@@ -10,6 +10,7 @@
 ## get the date stamp
 date_stamp = paste(unlist(strsplit(substr(Sys.time(),1,10),"-")),collapse="")
 ## get the hash of the current state of the Git folder
+setwd("~/Documents/gitrep/MoBa_data_cleaning")
 hash = system(paste("git log --pretty=format:'%h' -n 1"),intern=TRUE)
 
 file_dir = "~/Desktop/MoBa_v6/"
