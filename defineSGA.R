@@ -168,11 +168,6 @@ gardosi<-function(weight,height,sex,parity,ga,birthweight) {
 M3$PCTgardosi<-gardosi(M3$WEIGHT_1stT,M3$HEIGHT,M3$SEX,M3$PARITY,M3$GA,M3$BIRTHWEIGHT)
 M3$SGAgardosi<-as.numeric(M3$PCTgardosi<10)
 
-table(M3$SGAgardosi,M3$SGAgardosi2,dnn=c("coef. from 2009","original coef."))
-plot(M3$PCTgardosi[1:1000],M3$PCTgardosi2[1:1000],xlab="percentiles calculated using coef. from 2009",ylab="percentiles calculated using original coef.")
-abline(0,1,col="red")
-text(paste("corr. coef.:",round(cor(M3$PCTgardosi,M3$PCTgardosi2,use="c"),digits=4)),x=50,y=5,col="darkred")
-
 ### CASE 4: MARSAL
 
 marsal=function(ga,birthweight,sex){
