@@ -18,7 +18,7 @@ file_out = paste(file_dir,"MOBA_PDB1581_fetalWEIGHTandSGA_",date_stamp,"_",hash,
 
 ## this file contains the cleaned, corrected and imputed mother height/weight info
 #### (don't forget to set the INHASH each time a new data file is produced)
-infile="MOBA_PDB1581_IMPUTED_maternalHgh1Wgh1Wgh2_151005_"
+infile="MOBA_PDB1581_IMPUTED_maternalHgh1Wgh1Wgh2_20151005_"
 INHASH="1a447dc"
 q1=read.csv(paste(file_dir, infile, INHASH, ".txt", sep=""), sep="\t", header=T)
 names(q1)=c("PREG_ID","AA85","AA86","AA87","flAA85","flAA86","flAA87")
