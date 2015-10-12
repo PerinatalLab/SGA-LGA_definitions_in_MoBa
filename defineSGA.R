@@ -187,7 +187,7 @@ marsal=function(ga,birthweight,sex){
 }
 
 M3$PCTmarsal=sapply(1:nrow(M3), function(x) marsal(M3$GA[x]*7,M3$BIRTHWEIGHT[x],M3$SEX[x]))
-M3$SGAmarsal=as.numeric(M3$PCTmarsal<pnorm(-2))
+M3$SGAmarsal=as.numeric(M3$PCTmarsal<pnorm(-2)*100)
 
 ## write final output (per-fetus info + birthweight percentiles)
 out=M3[,c("PREG_ID","CHILDNUM","GA","SEX","BIRTHWEIGHT",
