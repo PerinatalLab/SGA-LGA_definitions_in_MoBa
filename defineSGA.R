@@ -168,6 +168,33 @@ gardosi<-function(weight,height,sex,parity,ga,birthweight) {
 M3$PCTgardosi<-gardosi(M3$WEIGHT_1stT,M3$HEIGHT,M3$SEX,M3$PARITY,M3$GA,M3$BIRTHWEIGHT)
 M3$SGAgardosi<-as.numeric(M3$PCTgardosi<10)
 
+gardosiO<-function(weight,height,sex,parity,ga,birthweight) {
+        # sex       sex of the fetus (coded 2 for girls, 1 for boys)
+        # parity    parity              first child is 0
+        # ga        gestational age in weeks
+        
+        ## This algorithm uses mother information to produce a personalized expected weight at term.
+        ## The coefficients used here come from personal communication
+        ## note that the means of mother height and weight do not match ours - neither does the sex correction
+        ## but the resulting predictions do not show any systemic bias
+        
+        w = weight - 63    # mean center (1st trim)          
+        wa = 8.872 * w - 0.0548 * w^2 + 0.000059 * w^3
+        h = height - 167      # mean center
+        ha = 8.316*h - 0.0004 * h^3
+        paritycorr = rep(20,232.6)                 # Guess no one has more than 20 kids!
+        paritycorr[1:4] = c(0,147.1,197.3,215.9)
+        p = paritycorr[parity+1]
+        s = (-1)^(sex+1) * 64.435
+        
+        tow = 3544.534 + wa + ha + s + p          # predicted weight at 40 weeks GA
+        tsd = tow*0.1157        # 11 % coef. of var. from original article (gardosi 1995) matches our data
+        hadlock(ga, birthweight, tow, tsd)
+}
+
+M3$PCTgardosiO<-gardosiO(M3$WEIGHT_1stT,M3$HEIGHT,M3$SEX,M3$PARITY,M3$GA,M3$BIRTHWEIGHT)
+M3$SGAgardosiO<-as.numeric(M3$PCTgardosiO<10)
+
 ### CASE 4: MARSAL
 
 marsal=function(ga,birthweight,sex){
