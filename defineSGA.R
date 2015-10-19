@@ -50,12 +50,12 @@ outFileStem = "MOBA_PDB1581_fetalWEIGHTandSGA"
 
 ### input file names:
 ## 1. this file contains the cleaned and imputed mother height/weight info
-infile = "MOBA_PDB1581_IMPUTED_maternalHgh1Wgh1Wgh2_20151006_4ab4a6c.txt"
+infile = "q1_test.txt"
 ## does this file contain imputation flag columns?
 imputeFlags = TRUE
 
 ## 2. this file contains the MFR data
-mfrfile = "output_mfr_basicfetalinfo.csv"
+mfrfile = "mfr_test.csv"
 
 ## 3. this file contains the population data for Skjaerven's method (enter the complete path!)
 skjaervenfile = "NSGA_BirthWeight_by_Skjaerven_2000_MEANSD.txt"
@@ -131,8 +131,8 @@ rgirls = ref[ref$SEX==2,]
 mboys=(M3$SEX==1 & !is.na(M3$GA))
 mgirls=(M3$SEX==2 & !is.na(M3$GA))
 mmiss=(is.na(M3$SEX) & !is.na(M3$GA))
-M3$REFMEAN=NULL
-M3$REFSD=NULL
+M3$REFMEAN=rep(0, nrow(M3))
+M3$REFSD=rep(0, nrow(M3))
 
 ### Setting rule=2 in the approx functions would make it use extreme endpoints instead of generating NA,
 ### when the values fall outside the range. Not recommended.
