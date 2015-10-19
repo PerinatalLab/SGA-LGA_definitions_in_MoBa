@@ -1,48 +1,109 @@
-########################################################################
-####### CONVERT BIRTH-WEIGHT TO PERCENTILES  (SKJAERVEN, HADLOCK, GARDOSI, MARSAL)
+####################################################################################
+##### CALCULATE BIRTH-WEIGHT PERCENTILES (SKJAERVEN, HADLOCK, GARDOSI, MARSAL) #####
 
-#### This script uses four different methods to evaluate birth-weight.
-#### The output is a percentile and SGA indication (1/0) for each fetus.
+## This script uses four different methods to evaluate birth-weight.
+## The output contains per-child info (gestational age, birthweight, sex), pregnancy and child IDs,
+## and 8 new columns: percentiles and SGA indications (1/0) for each model.
+## References for the model equations are found next to the formulas.
 
-# read in the csv data files
-## (note the required columns and their order)
+
+##### INPUT REQUIREMENTS #####
+
+## This script requires three input files:
+##
+## 1. imputed maternal data, in the following format:
+##      (INCLUDING HEADER LINE)
+##      PREG_ID     AA85    AA86    AA87    flAA85  flAA86  flAA87
+##      (this format is produced by script MoBa_imputing_MaternalHeightWeight.R)
+##      AA85-87 can be taken directly from MoBa Q1
+##      flAA85-87 are imputation flags. these flags are not required -
+##      if you did not use the imputation script, you can turn it off in settings below
+##
+## 2. additional information directly from MFR, in the following format:
+##      (NO HEADER LINE)
+##      PREG_ID     CHILD_NUMBER    MOTHERS_AGE     GA(days)      SEX(1/2)     BIRTHWEIGHT(g)     PARITY
+##      these columns correspond to the following variables from MFR:
+##      PREG_ID_540     BARN_NR    MORS_ALDER     SVLEN_DG      KJONN     VEKT     PARITET_5
+##
+## 3. population means and standard deviations for Skjaerven's method, in the following format:
+##      (INCLUDING HEADER LINE)
+##      GA(completed weeks)       SEX(1/2)       MEAN      SD
+##      this file can be retrieved from PerinatalLab GitHub:
+##      https://raw.githubusercontent.com/PerinatalLab/SGA-LGA_definitions_in_MoBa/master/NSGA_BirthWeight_by_Skjaerven_2000_MEANSD.txt
+
+
+##### SETTINGS #####
+
+## PLEASE CHECK AND UPDATE THIS SECTION BEFORE PROCEEDING!
+
+## do you have GitHub installed?
+haveGit = TRUE
+
+## if yes, enter its folder; if not, leave any value
+gitDir = "~/Documents/gitrep/SGA-LGA_definitions_in_MoBa/"
+
+## enter the folder which contains input data files (output will be written there as well)
+file_dir = "~/Desktop/MoBa_v6/"
+
+## the output file name will start with this:
+outFileStem = "MOBA_PDB1581_fetalWEIGHTandSGA"
+
+### input file names:
+## 1. this file contains the cleaned and imputed mother height/weight info
+infile = "MOBA_PDB1581_IMPUTED_maternalHgh1Wgh1Wgh2_20151006_4ab4a6c.txt"
+## does this file contain imputation flag columns?
+imputeFlags = TRUE
+
+## 2. this file contains the MFR data
+mfrfile = "output_mfr_basicfetalinfo.csv"
+
+## 3. this file contains the population data for Skjaerven's method (enter the complete path!)
+skjaervenfile = "NSGA_BirthWeight_by_Skjaerven_2000_MEANSD.txt"
+
+
+####################################################################################
+####################################################################################
+
+##### CALCULATIONS #####
+## no changes should be needed here - just run everything below.
+
+## install the SQLDF package if you do not have it yet
+if(!require(sqldf)) install.packages('sqldf')
+library(sqldf)
+
+## retrieve git hash if possible
+if(haveGit){
+        setwd(gitDir)
+        hash = system(paste("git log --pretty=format:'%h' -n 1"),intern=TRUE)
+} else { hash = "0000000" }
 
 ## get the date stamp
-date_stamp = paste(unlist(strsplit(substr(Sys.time(),1,10),"-")),collapse="")
-## get the hash of the current state of the Git folder
-setwd("~/Documents/gitrep/SGA-LGA_definitions_in_MoBa/")
-hash = system(paste("git log --pretty=format:'%h' -n 1"),intern=TRUE)
+date_stamp = paste(unlist(strsplit(substr(Sys.time(),1,10),"-")), collapse="")
+file_out = paste(file_dir, outFileStem, "_", date_stamp, "_", hash, ".txt",sep="")
 
-file_dir = "~/Desktop/MoBa_v6/"
-file_out = paste(file_dir,"MOBA_PDB1581_fetalWEIGHTandSGA_",date_stamp,"_",hash,".txt",sep="")
-
-## this file contains the cleaned, corrected and imputed mother height/weight info
-#### (don't forget to set the INHASH each time a new data file is produced)
-infile="MOBA_PDB1581_IMPUTED_maternalHgh1Wgh1Wgh2_"
-INHASH="20151006_4ab4a6c"
-q1=read.csv(paste(file_dir, infile, INHASH, ".txt", sep=""), sep="\t", header=T)
-names(q1)=c("PREG_ID","AA85","AA86","AA87","flAA85","flAA86","flAA87")
+## read input files
+q1 = read.csv(paste(file_dir, infile, sep=""), sep="\t", header=T)
+if(imputeFlags){
+        names(q1) = c("PREG_ID","AA85","AA86","AA87","flAA85","flAA86","flAA87")
+} else {
+        names(q1) = c("PREG_ID","AA85","AA86","AA87")
+}
 head(q1); dim(q1)
 
-## these two files contain info retrieved directly from MoBa without any changes
-en=read.csv(paste(file_dir,"output_q2_kilojoules.csv",sep=""), sep=",", header=T)
-names(en)=c("PREG_ID","KJ")
-head(en); dim(en)
-
-mfr=read.csv(paste(file_dir,"output_mfr_basicfetalinfo.csv",sep=""),sep=",",header=F)
-names(mfr)=c("PREG_ID","CHILDNUM","AGE","GA","SEX","BIRTHWEIGHT","PARITY")
+mfr = read.csv(paste(file_dir, mfrfile, sep=""),sep=",", header=F)
+names(mfr) = c("PREG_ID","CHILDNUM","AGE","GA","SEX","BIRTHWEIGHT","PARITY")
 head(mfr); dim(mfr)
 
-## merge the last two csvs
-library(sqldf)
-M3=sqldf("SELECT mfr.PREG_ID || '_' || mfr.CHILDNUM as FETID, mfr.*, q1.AA85 as WEIGHT, q1.AA86 as WEIGHT_1stT, q1.AA87 as HEIGHT,
-        q1.flAA85, q1.flAA86, q1.flAA87 FROM mfr INNER JOIN q1 ON mfr.PREG_ID=q1.PREG_ID")
+## merge them
+### note that a unique fetal ID is also created - it can be useful to keep track of the data
+M3=sqldf("SELECT mfr.PREG_ID || '_' || mfr.CHILDNUM as FETID, mfr.*, q1.AA85 as WEIGHT, q1.AA86 as WEIGHT_1stT, q1.AA87 as HEIGHT
+        FROM mfr LEFT JOIN q1 ON mfr.PREG_ID=q1.PREG_ID")
 head(M3); dim(M3); length(unique(M3$FETID))
 
 # initial cleanup
 
 ## abnormal values should be removed
-## (although abnormal SEX values are not present in GOODBIRTH set)
+## (although abnormal SEX values usually are not present after filtering malformations etc.)
 M3[(M3$SEX<1 | M3$SEX>2), "SEX"] = NA
 M3$GA<-M3$GA/7
 M3[M3$GA<15, "GA"] = NA
@@ -54,30 +115,36 @@ table(round(M3$GA,0),useNA="a")
 table(M3$SEX,useNA="a")
 table(round(M3$BIRTHWEIGHT,-2),useNA="a")
 
-### CASE 1: skjaerven
+#####################
+### CASE 1: Skjaerven
 
-## read in the table
-ref=read.table("NSGA_BirthWeight_by_Skjaerven_2000_MEANSD.txt",header=T)
-head(ref)
-rboys<-ref[ref$SEX==1,]
-rgirls<-ref[ref$SEX==2,]
+## based on:
+# Skjaerven et al. (2001) "Birthweight by gestational age in Norway"
+# http://onlinelibrary.wiley.com/doi/10.1034/j.1600-0412.2000.079006440.x/abstract
 
-## given the GA and SEX of each fetus, retrieve the mean weight from the reference growth curves
+## read in the reference data table
+ref = read.table(skjaervenfile,header=T)
+rboys = ref[ref$SEX==1,]
+rgirls = ref[ref$SEX==2,]
+
+## given the GA and SEX of each fetus, assign the mean weight from reference growth curves
 mboys=(M3$SEX==1 & !is.na(M3$GA))
 mgirls=(M3$SEX==2 & !is.na(M3$GA))
 mmiss=(is.na(M3$SEX) & !is.na(M3$GA))
-
-### setting rule=2 would tell approx to use extreme endpoints instead of generating NA, when the values fall outside the range
-### (don't think that's a good idea)
 M3$REFMEAN=NULL
 M3$REFSD=NULL
+
+### Setting rule=2 in the approx functions would make it use extreme endpoints instead of generating NA,
+### when the values fall outside the range. Not recommended.
+
+## assign means
 M3$REFMEAN[which(mboys)] = approx(rboys$GA, rboys$MEANWEIGHT, M3$GA[which(mboys)])$y
 M3$REFMEAN[which(mgirls)] = approx(rgirls$GA, rgirls$MEANWEIGHT, M3$GA[which(mgirls)])$y
-### when SEX is NA, but GA is known, just use both genders and take the average
+### when SEX is NA, just use both genders and take the average
 M3$REFMEAN[which(mmiss)] = (approx(rgirls$GA, rgirls$MEANWEIGHT, M3$GA[mmiss])$y +
                                     approx(rboys$GA, rboys$MEANWEIGHT, M3$GA[which(mmiss)])$y)/2
 
-## retrieve SD in the same way
+## assign SDs
 M3$REFSD[which(mboys)]=approx(rboys$GA, rboys$SD, M3$GA[which(mboys)])$y
 M3$REFSD[which(mgirls)]=approx(rgirls$GA, rgirls$SD, M3$GA[which(mgirls)])$y
 M3$REFSD[which(mmiss)]=(approx(rgirls$GA, rgirls$SD, M3$GA[which(mmiss)])$y +
@@ -88,22 +155,21 @@ M3$PCTskjaerven<-pnorm(M3$BIRTHWEIGHT,M3$REFMEAN,M3$REFSD)*100
 ## SGA can then be determined simply
 M3$SGAskjaerven<-as.numeric(M3$PCTskjaerven<10)
 
-## check the distribution
-hist(M3$PCTskjaerven,breaks=100,col="grey")
-abline(v=10,col="red")
-text(paste("total number of SGAs:", sum(M3$SGAskjaerven,na.rm=T)),x=40, y=1300,col="darkred")
 
+#####################
 ### CASE 2: HADLOCK
 
-hadlock=function(ga,weight,refmean,refsd){
+## based on:
+# Hadlock FP et al. (1991) "In utero analysis of fetal growth: a sonographic weight standard",
+# with correction for GA < 25 weeks as described in:
+# http://www.gestation.net/GROW_documentation.pdf, page 5
+
+hadlock = function(ga,weight,refmean,refsd){
         ## input requires GA in rounded weeks
         ## weight = birthweight (in g)
         ## sex = 1 (boys) or 2 (girls)
         ## refmean and refsd are calculated at 280 days
-        
-        ## use this correction if input is in completed weeks:
-        # ga=ga+0.5
-        
+
         ## original Hadlock equation is valid only for GA >=25
         prop25=(299.1 - 31.85 * ga + 1.094 * ga^2 - 0.01055 * ga^3)/100
         prop24=(-5.86048381 + 1.419180433 * ga - 0.116517911 * ga^2 + 0.004154453 * ga^3)/100
@@ -116,12 +182,12 @@ hadlock=function(ga,weight,refmean,refsd){
 }
 
 ## calculate parameters @ 280 days
-mw40_boys=mean(M3[which(M3$GA==40 & M3$SEX==1),"BIRTHWEIGHT"], na.rm=T)
-mw40_girls=mean(M3[which(M3$GA==40 & M3$SEX==2),"BIRTHWEIGHT"], na.rm=T)
-sd40_boys=sd(M3[which(M3$GA==40 & M3$SEX==1),"BIRTHWEIGHT"], na.rm=T)
-sd40_girls=sd(M3[which(M3$GA==40 & M3$SEX==2),"BIRTHWEIGHT"], na.rm=T)
+mw40_boys = mean(M3[which(M3$GA==40 & M3$SEX==1),"BIRTHWEIGHT"], na.rm=T)
+mw40_girls = mean(M3[which(M3$GA==40 & M3$SEX==2),"BIRTHWEIGHT"], na.rm=T)
+sd40_boys = sd(M3[which(M3$GA==40 & M3$SEX==1),"BIRTHWEIGHT"], na.rm=T)
+sd40_girls = sd(M3[which(M3$GA==40 & M3$SEX==2),"BIRTHWEIGHT"], na.rm=T)
 
-## instead of Skjaerven means, assign the constants to the df for more flexible calculations
+## instead of Skjaerven means, assign the above constants to the df for more flexible calculations
 M3$REFMEAN[which(mboys)]=mw40_boys
 M3$REFMEAN[which(mgirls)]=mw40_girls
 M3$REFMEAN[which(mmiss)]=mean(mw40_boys,mw40_girls)
@@ -134,71 +200,52 @@ M3$PCThadlock<-hadlock(M3$GA,M3$BIRTHWEIGHT,M3$REFMEAN,M3$REFSD)
 ## SGA can then be determined simply
 M3$SGAhadlock<-as.numeric(M3$PCThadlock<10)
 
-## check if both tests indicate the same SGAs
-## note that Skjaerven produces NAs when the GA value falls outside normal range
-table(M3$SGAskjaerven,M3$SGAhadlock,dnn=c("Skjaerven","Hadlock"),useNA="a")
 
-
+#####################
 ### CASE 3: GARDOSI
 
-gardosi<-function(weight,height,sex,parity,ga,birthweight) {
-        # sex       sex of the fetus (coded 2 for girls, 1 for boys)
-        # parity    parity              first child is 0
-        # ga        gestational age in weeks
+## parameters taken from:
+# Gardosi, Clausson & Francis (2009) "The value of customised centiles in
+# assessing perinatal mortality risk associated with parity and maternal size"
+# http://onlinelibrary.wiley.com/doi/10.1111/j.1471-0528.2009.02245.x/full
+
+## for the original description of the method, see:
+# Gardosi et al. (1995) "An adjustable fetal weight standard"
+# http://onlinelibrary.wiley.com/doi/10.1046/j.1469-0705.1995.06030168.x/pdf
+
+gardosi = function(weight,height,sex,parity,ga,birthweight) {
+        ## sex       sex of the fetus (coded 2 for girls, 1 for boys)
+        ## parity    parity (first child is 0)
+        ## ga        gestational age in rounded weeks
         
-        ## This algorithm uses mother information to produce a personalized expected weight at term.
-        ## The coefficients used here come from article Gardosi 2009, "The value of customised centiles..."
-        ## note that the means of mother height and weight do not match ours - neither does the sex correction
+        ## note that the means of mother height and weight do not match ours - neither does the sex correction -
         ## but the resulting predictions do not show any systemic bias
         
-        w = weight - 65    # mean center (1st trim)          
+        w = weight - 65    # mean center (1st trim weight)
         wa = 9.066 * w - 0.067 * w^2
         h = height - 166      # mean center
         ha = 8.316*h - 0.006 * h^3
-        paritycorr = rep(20,189)                 # Guess no one has more than 20 kids!
+        paritycorr = rep(20,189)        # limited to 20 kids, but should be more than enough
         paritycorr[1:4] = c(0,136,174.4,183.4)
         p = paritycorr[parity+1]
         s = (-1)^(sex+1) * 64.1
         
         tow = 3575.2 + wa + ha + s + p          # predicted weight at 40 weeks GA
-        tsd = tow*0.11        # 11 % coef. of var. from original article (gardosi 1995) matches our data
+        tsd = tow * 0.11        # 11 % coef. of var. from original article (gardosi 1995) also matches our data
         hadlock(ga, birthweight, tow, tsd)
 }
 
 M3$PCTgardosi<-gardosi(M3$WEIGHT_1stT,M3$HEIGHT,M3$SEX,M3$PARITY,M3$GA,M3$BIRTHWEIGHT)
 M3$SGAgardosi<-as.numeric(M3$PCTgardosi<10)
 
-gardosiO<-function(weight,height,sex,parity,ga,birthweight) {
-        # sex       sex of the fetus (coded 2 for girls, 1 for boys)
-        # parity    parity              first child is 0
-        # ga        gestational age in weeks
-        
-        ## This algorithm uses mother information to produce a personalized expected weight at term.
-        ## The coefficients used here come from personal communication
-        ## note that the means of mother height and weight do not match ours - neither does the sex correction
-        ## but the resulting predictions do not show any systemic bias
-        
-        w = weight - 63    # mean center (1st trim)          
-        wa = 8.872 * w - 0.0548 * w^2 + 0.000059 * w^3
-        h = height - 167      # mean center
-        ha = 8.316*h - 0.0004 * h^3
-        paritycorr = rep(20,232.6)                 # Guess no one has more than 20 kids!
-        paritycorr[1:4] = c(0,147.1,197.3,215.9)
-        p = paritycorr[parity+1]
-        s = (-1)^(sex+1) * 64.435
-        
-        tow = 3544.534 + wa + ha + s + p          # predicted weight at 40 weeks GA
-        tsd = tow*0.1157        # 11 % coef. of var. from original article (gardosi 1995) matches our data
-        hadlock(ga, birthweight, tow, tsd)
-}
-
-M3$PCTgardosiO<-gardosiO(M3$WEIGHT_1stT,M3$HEIGHT,M3$SEX,M3$PARITY,M3$GA,M3$BIRTHWEIGHT)
-M3$SGAgardosiO<-as.numeric(M3$PCTgardosiO<10)
-
+#####################
 ### CASE 4: MARSAL
 
-marsal=function(ga,birthweight,sex){
-        ## equations from Marsal 1996, "intrauterine growth curves..."
+## based on:
+# Marsal et al. (1996) "Intrauterine growth curves based on ultrasonically estimated foetal weights"
+# http://onlinelibrary.wiley.com/doi/10.1111/j.1651-2227.1996.tb14164.x/pdf
+
+marsal = function(ga,birthweight,sex){
         if(is.na(sex)) sex=0
         if(sex==1){
                 ## boys
@@ -214,11 +261,49 @@ marsal=function(ga,birthweight,sex){
 }
 
 M3$PCTmarsal=sapply(1:nrow(M3), function(x) marsal(M3$GA[x]*7,M3$BIRTHWEIGHT[x],M3$SEX[x]))
+## note that the cutoff here is -2 SDs, not 10th percentile
 M3$SGAmarsal=as.numeric(M3$PCTmarsal<pnorm(-2)*100)
 
-## write final output (per-fetus info + birthweight percentiles)
+####################################################################################
+####################################################################################
+
+##### RESULTS #####
+
+par(mfrow=c(1,2))
+
+## check the distributions; red line indicates the SGA cutoff
+hist(M3$PCTskjaerven, breaks=100, col="grey", main = "Method: Skjaerven")
+abline(v=10, col="red")
+text(paste("total number of SGAs:", sum(M3$SGAskjaerven,na.rm=T)), x=50, y=1.5*nrow(M3)/100, col="darkred")
+
+hist(M3$PCThadlock, breaks=100, col="grey", main = "Method: Hadlock")
+abline(v=10, col="red")
+text(paste("total number of SGAs:", sum(M3$SGAhadlock,na.rm=T)), x=50, y=1.5*nrow(M3)/100, col="darkred")
+
+hist(M3$PCTgardosi, breaks=100, col="grey", main = "Method: Gardosi")
+abline(v=10, col="red")
+text(paste("total number of SGAs:", sum(M3$SGAgardosi,na.rm=T)), x=50, y=1.5*nrow(M3)/100, col="darkred")
+
+hist(M3$PCTmarsal, breaks=100, col="grey", main = "Method: Marsal")
+abline(v=10, col="red")
+text(paste("total number of SGAs:", sum(M3$SGAmarsal,na.rm=T)), x=50, y=1.5*nrow(M3)/100, col="darkred")
+
+
+## inspect the differences in SGA indications
+### note that tests can produce NAs if the GA value falls outside normal range
+table(M3$SGAskjaerven, M3$SGAhadlock, dnn=c("Skjaerven","Hadlock"), useNA="a")
+table(M3$SGAskjaerven, M3$SGAgardosi, dnn=c("Skjaerven","Gardosi"), useNA="a")
+table(M3$SGAskjaerven, M3$SGAmarsal, dnn=c("Skjaerven","Marsal"), useNA="a")
+table(M3$SGAhadlock, M3$SGAgardosi, dnn=c("Hadlock","Gardosi"), useNA="a")
+table(M3$SGAhadlock, M3$SGAmarsal, dnn=c("Hadlock","Marsal"), useNA="a")
+table(M3$SGAgardosi, M3$SGAmarsal, dnn=c("Gardosi","Marsal"), useNA="a")
+
+
+## write final output (fetal info + birthweight percentiles)
 out=M3[,c("PREG_ID","CHILDNUM","GA","SEX","BIRTHWEIGHT",
-          "PCTskjaerven","PCThadlock","PCTgardosi","PCTmarsal", "SGAskjaerven","SGAhadlock","SGAgardosi","SGAmarsal")]
+          "PCTskjaerven","PCThadlock","PCTgardosi","PCTmarsal",
+          "SGAskjaerven","SGAhadlock","SGAgardosi","SGAmarsal")]
+## converts GA back to days
 out$GA=out$GA*7
 head(out); dim(out)
 
