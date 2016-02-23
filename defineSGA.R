@@ -50,7 +50,7 @@ outFileStem = "MOBA_PDB540_Linda_fetalWEIGHTandSGA"
 
 ### input file names:
 ## 1. this file contains the cleaned and imputed mother height/weight info
-infile = "q1_test.txt"
+infile = "MOBA_PDB540_Linda_IMPUTED_maternalHgh1Wgh1Wgh2_20160223_32391fa.txt"
 ## does this file contain imputation flag columns?
 imputeFlags = TRUE
 
@@ -68,8 +68,8 @@ skjaervenfile = "NSGA_BirthWeight_by_Skjaerven_2000_MEANSD.txt"
 ## no changes should be needed here - just run everything below.
 
 ## install the SQLDF package if you do not have it yet
-if(!require(sqldf)) install.packages('sqldf')
-library(sqldf)
+if(!require(dplyr)) install.packages('dplyr')
+library(dplyr)
 if(!require(gplots)) install.packages('gplots')
 library(gplots)
 
@@ -98,8 +98,10 @@ head(mfr); dim(mfr)
 
 ## merge them
 ### note that a unique fetal ID is also created - it can be useful to keep track of the data
-M3=sqldf("SELECT mfr.PREG_ID || '_' || mfr.CHILDNUM as FETID, mfr.*, q1.AA85 as WEIGHT, q1.AA86 as WEIGHT_1stT, q1.AA87 as HEIGHT
-        FROM mfr LEFT JOIN q1 ON mfr.PREG_ID=q1.PREG_ID")
+M3 = left_join(mfr, q1, by="PREG_ID")
+M3$FETID = paste(mfr$PREG_ID, mfr$CHILDNUM, sep="_")
+M3 = M3[,c("FETID", "PREG_ID", "CHILDNUM", "AGE", "GA", "SEX", "BIRTHWEIGHT", "PARITY", "AA85", "AA86", "AA87")]
+names(M3)[9:11] = c("WEIGHT", "WEIGHT_1stT", "HEIGHT")
 head(M3); dim(M3); length(unique(M3$FETID))
 
 # initial cleanup
@@ -266,6 +268,18 @@ M3$PCTmarsal=sapply(1:nrow(M3), function(x) marsal(M3$GA[x]*7,M3$BIRTHWEIGHT[x],
 ## note that the cutoff here is -2 SDs, not 10th percentile
 M3$SGAmarsal=as.numeric(M3$PCTmarsal<pnorm(-2)*100)
 
+#####################
+### CASE 5: EMPIRICAL PERCENTILES
+
+## simply converts birthweight to a percentile score
+## of all weights with the same GA and SEX.
+#### !! note that NA birthweights are removed here, as they interfere with percentile calculations !!
+M4 = group_by(M3, GA, SEX) %>% filter(!is.na(BIRTHWEIGHT))
+M4 = mutate(M4, PCTempirical = dense_rank(BIRTHWEIGHT)) %>%
+        mutate(PCTempirical = (PCTempirical-0.5)/max(PCTempirical)*100)
+M4$SGAempirical<-as.numeric(M4$PCTempirical<10)
+
+
 ####################################################################################
 ####################################################################################
 
@@ -274,22 +288,25 @@ M3$SGAmarsal=as.numeric(M3$PCTmarsal<pnorm(-2)*100)
 par(mfrow=c(1,2))
 
 ## check the distributions; red line indicates the SGA cutoff
-hist(M3$PCTskjaerven, breaks=100, col="grey", main = "Method: Skjaerven")
+hist(M4$PCTskjaerven, breaks=100, col="grey", main = "Method: Skjaerven")
 abline(v=10, col="red")
-text(paste("total number of SGAs:", sum(M3$SGAskjaerven,na.rm=T)), x=50, y=1.5*nrow(M3)/100, col="darkred")
+text(paste("total number of SGAs:", sum(M4$SGAskjaerven,na.rm=T)), x=50, y=1.5*nrow(M4)/100, col="darkred")
 
-hist(M3$PCThadlock, breaks=100, col="grey", main = "Method: Hadlock")
+hist(M4$PCThadlock, breaks=100, col="grey", main = "Method: Hadlock")
 abline(v=10, col="red")
-text(paste("total number of SGAs:", sum(M3$SGAhadlock,na.rm=T)), x=50, y=1.5*nrow(M3)/100, col="darkred")
+text(paste("total number of SGAs:", sum(M4$SGAhadlock,na.rm=T)), x=50, y=1.5*nrow(M4)/100, col="darkred")
 
-hist(M3$PCTgardosi, breaks=100, col="grey", main = "Method: Gardosi")
+hist(M4$PCTgardosi, breaks=100, col="grey", main = "Method: Gardosi")
 abline(v=10, col="red")
-text(paste("total number of SGAs:", sum(M3$SGAgardosi,na.rm=T)), x=50, y=1.5*nrow(M3)/100, col="darkred")
+text(paste("total number of SGAs:", sum(M4$SGAgardosi,na.rm=T)), x=50, y=1.5*nrow(M4)/100, col="darkred")
 
-hist(M3$PCTmarsal, breaks=100, col="grey", main = "Method: Marsal")
+hist(M4$PCTmarsal, breaks=100, col="grey", main = "Method: Marsal")
 abline(v=10, col="red")
-text(paste("total number of SGAs:", sum(M3$SGAmarsal,na.rm=T)), x=50, y=1.5*nrow(M3)/100, col="darkred")
+text(paste("total number of SGAs:", sum(M4$SGAmarsal,na.rm=T)), x=50, y=1.5*nrow(M4)/100, col="darkred")
 
+hist(M4$PCTempirical, breaks=100, col="grey", main = "Method: Empirical")
+abline(v=10, col="red")
+text(paste("total number of SGAs:", sum(M4$SGAempirical,na.rm=T)), x=50, y=1.5*nrow(M4)/100, col="darkred")
 
 ## inspect the differences in SGA indications
 ### note that tests can produce NAs if the GA value falls outside normal range
@@ -299,13 +316,18 @@ table(M3$SGAskjaerven, M3$SGAmarsal, dnn=c("Skjaerven","Marsal"), useNA="a")
 table(M3$SGAhadlock, M3$SGAgardosi, dnn=c("Hadlock","Gardosi"), useNA="a")
 table(M3$SGAhadlock, M3$SGAmarsal, dnn=c("Hadlock","Marsal"), useNA="a")
 table(M3$SGAgardosi, M3$SGAmarsal, dnn=c("Gardosi","Marsal"), useNA="a")
+table(M4$SGAskjaerven, M4$SGAempirical, dnn=c("Skjaerven","Empirical"), useNA="a")
+table(M4$SGAhadlock, M4$SGAempirical, dnn=c("Skjaerven","Empirical"), useNA="a")
+table(M4$SGAgardosi, M4$SGAempirical, dnn=c("Skjaerven","Empirical"), useNA="a")
+table(M4$SGAmarsal, M4$SGAempirical, dnn=c("Skjaerven","Empirical"), useNA="a")
 
-venn(M3[, grep("^SGA", colnames(M3))])
+par(mfrow=c(1,1))
+venn(na.exclude(M3[, grep("^SGA", colnames(M3))]))
 
 ## write final output (fetal info + birthweight percentiles)
-out=M3[,c("PREG_ID","CHILDNUM","GA","SEX","BIRTHWEIGHT",
-          "PCTskjaerven","PCThadlock","PCTgardosi","PCTmarsal",
-          "SGAskjaerven","SGAhadlock","SGAgardosi","SGAmarsal")]
+out=M4[,c("PREG_ID","CHILDNUM","GA","SEX","BIRTHWEIGHT",
+          "PCTskjaerven","PCThadlock","PCTgardosi","PCTmarsal","PCTempirical",
+          "SGAskjaerven","SGAhadlock","SGAgardosi","SGAmarsal","SGAempirical")]
 ## converts GA back to days
 out$GA=out$GA*7
 head(out); dim(out)
