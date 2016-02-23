@@ -46,7 +46,7 @@ gitDir = "~/Documents/gitrep/SGA-LGA_definitions_in_MoBa/"
 file_dir = "~/Desktop/MoBa_v6/"
 
 ## the output file name will start with this:
-outFileStem = "MOBA_PDB1581_fetalWEIGHTandSGA"
+outFileStem = "MOBA_PDB540_Linda_fetalWEIGHTandSGA"
 
 ### input file names:
 ## 1. this file contains the cleaned and imputed mother height/weight info
@@ -55,7 +55,7 @@ infile = "q1_test.txt"
 imputeFlags = TRUE
 
 ## 2. this file contains the MFR data
-mfrfile = "mfr_test.csv"
+mfrfile = "output_mfr_basicfetalinfo.csv"
 
 ## 3. this file contains the population data for Skjaerven's method (enter the complete path!)
 skjaervenfile = "NSGA_BirthWeight_by_Skjaerven_2000_MEANSD.txt"
@@ -70,6 +70,8 @@ skjaervenfile = "NSGA_BirthWeight_by_Skjaerven_2000_MEANSD.txt"
 ## install the SQLDF package if you do not have it yet
 if(!require(sqldf)) install.packages('sqldf')
 library(sqldf)
+if(!require(gplots)) install.packages('gplots')
+library(gplots)
 
 ## retrieve git hash if possible
 if(haveGit){
@@ -298,6 +300,7 @@ table(M3$SGAhadlock, M3$SGAgardosi, dnn=c("Hadlock","Gardosi"), useNA="a")
 table(M3$SGAhadlock, M3$SGAmarsal, dnn=c("Hadlock","Marsal"), useNA="a")
 table(M3$SGAgardosi, M3$SGAmarsal, dnn=c("Gardosi","Marsal"), useNA="a")
 
+venn(M3[, grep("^SGA", colnames(M3))])
 
 ## write final output (fetal info + birthweight percentiles)
 out=M3[,c("PREG_ID","CHILDNUM","GA","SEX","BIRTHWEIGHT",
